@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+*.iml
+.idea/
+.vscode/
+*.log
+.env
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+.DS_Store

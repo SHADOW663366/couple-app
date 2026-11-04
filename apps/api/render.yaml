@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: couple-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: INVITE_CODE_TTL_SECONDS
+        value: "1800"
+      - key: DATABASE_URL
+        value: file:./prod.db

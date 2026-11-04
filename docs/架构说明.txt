@@ -1,0 +1,169 @@
+情侣向 App — 架构说明
+更新日期：2026-11-04
+
+一、总体架构
+采用「Flutter 客户端 + NestJS 后端 + PostgreSQL/Redis + 对象存储 + DeepSeek」的分层结构。
+
+  ┌─────────────────────────────────────────┐
+  │           Flutter App (iOS/Android)      │
+  │  账号 | 绑定 | AI聊天 | 真心话 | 日记      │
+  └───────────────┬─────────────────────────┘
+                  │ HTTPS / WSS
+  ┌───────────────▼─────────────────────────┐
+  │              API Gateway / NestJS        │
+  │  Auth | Pair | Chat | Truth | Diary | AI │
+  └──────┬──────────┬──────────┬────────────┘
+         │          │          │
+    PostgreSQL    Redis    Object Storage
+         │
+    DeepSeek API（仅服务端调用）
+
+原则：
+- 客户端不持有模型 Key；所有 AI 经服务端
+- 情侣数据以 pair_id 隔离；未绑定用户 pair_id 为空，仅能访问单人接口
+- 媒体走对象存储直传（签名 URL），业务库只存元数据
+
+二、客户端分层
+1. Presentation：页面与组件（登录、首页、角色、聊天、真心话、日记）
+2. Application：Riverpod Notifier / Controller（用例编排）
+3. Domain：实体与规则（User、Pair、Character、DiaryEntry、TruthSession）
+4. Data：API Client、WebSocket、本地缓存、题库包
+
+关键页面流：
+- 未登录 → 登录/注册
+- 已登录未绑定 → 单人首页（AI / 单人真心话 / 个人日记）+ 绑定入口
+- 已绑定 → 双人首页（共同入口、亲密度、对方动态）
+
+三、服务端模块划分（NestJS）
+1. AuthModule
+   - 注册、登录、刷新 Token、注销
+2. UserModule
+   - 资料、头像、设置（AI 读日记开关等）
+3. PairModule
+   - 生成邀请码 / 二维码 payload、接受绑定、解绑、查询伴侣信息
+4. CharacterModule
+   - 角色 CRUD、人设、皮肤资源引用、默认角色模板
+5. ChatModule
+   - 单聊自己角色、与对方角色互动、双人一起聊（会话类型区分）
+   - WebSocket 推送流式 token；落库消息与摘要
+6. TruthModule
+   - 题库版本、抽题、会话状态机（单人/双人轮流）、答题提交、回忆列表
+   - AI 出题任务（带关系上下文）
+7. DiaryModule
+   - 个人日记、分享权限、共同日记条目追加、媒体元数据
+8. MediaModule
+   - 签发上传/下载 URL、校验归属
+9. IntimacyModule
+   - 亲密度计算、恋爱日、成就事件
+10. AiModule
+   - Prompt 组装、DeepSeek 调用、限流、安全过滤、记忆摘要任务
+11. NotifyModule
+   - 推送：轮到你答题、对方分享日记、共同日记更新等
+
+四、核心领域模型（简化）
+User
+- id, phone/email, profile, settings
+
+Pair
+- id, user_a, user_b, bound_at, status
+
+Character
+- id, owner_user_id, name, persona_json, art_assets, visibility
+
+ChatSession
+- id, type(self|partner_char|together), pair_id?, character_id, participants[]
+
+ChatMessage
+- id, session_id, sender(user|ai|system), content, created_at
+
+TruthDeck / TruthCard
+- 本地包 + 服务端版本；AI 生成题写入 generated_cards
+
+TruthSession
+- mode(solo|duo), pair_id?, current_turn, intimacy_gate, status
+
+DiaryEntry
+- id, author_id, pair_id?, visibility(private|shared|joint), text, media[], tags
+
+IntimacyState
+- pair_id, score, level, love_day_start
+
+五、双人绑定与权限
+绑定：
+1. A 申请邀请码（短时有效，Redis）
+2. B 扫码/输码确认
+3. 创建 Pair，双方 user.pair_id 写入；初始化 Intimacy
+
+权限矩阵（摘要）：
+- 未绑定：仅自己的 Character、个人 Diary(private)、Truth solo
+- 已绑定：
+  - 可读对方 shared 日记与 joint 日记
+  - 可发起 duo 真心话
+  - 可与对方 Character 互动 / together 会话
+- 解绑：隐藏对方私密与共同内容策略需明确（建议：joint 对双方只读归档，取消继续写入）
+
+六、AI 会话架构
+会话类型：
+1. SELF：用户 ↔ 自己的角色
+2. PARTNER_CHAR：用户 ↔ 伴侣的角色（需绑定）
+3. TOGETHER：双方 + 某一角色（需绑定；消息带 speaker）
+
+上下文流水线：
+1. 取人设卡 + 关系设定（是否主人/伴侣）
+2. 取近期消息窗口
+3. 取长期记忆摘要（Redis/DB）
+4. 可选注入：亲密度、恋爱天数、用户允许的日记摘要
+5. 调 DeepSeek（流式）→ 安全过滤 → 推客户端 → 异步更新摘要
+
+七、真心话状态机
+Solo：抽题 → 作答 → 存档 →（可选）AI 点评
+Duo：创建会话 → 决定先手 → 抽题（本地层级题或 AI 题）→ 当前方作答 → 对方可见 → 切换回合 → 结束归档到「我们的回忆」
+
+题来源优先级：
+- 先按亲密度从本地题包抽
+- 每隔 N 题或用户点「惊喜题」走 AI 生成（带双方近期主题，脱敏）
+
+八、日记与媒体
+写入：
+1. 客户端申请 upload URL（MediaModule）
+2. 直传对象存储
+3. 创建/更新 DiaryEntry（存 media key、时长、尺寸）
+
+共同日记：
+- entry.visibility = joint
+- 双方可 append block（文字/图/语音），WebSocket 通知对方刷新
+- 冲突：按时间追加为主（不做复杂 OT；完整版足够）
+
+九、实时与同步
+- 聊天流式、共同日记提醒、真心话回合：WebSocket
+- 列表类数据：REST 分页拉取 + 本地缓存
+- 题库包：启动时检查版本，差分或整包下载到本地
+
+十、安全与风控
+- 全接口鉴权；pair 资源校验归属
+- AI / 上传接口按用户与 IP 限流
+- 媒体 URL 短时签名；禁止遍历
+- 内容安全：聊天与日记公开分享路径过审核策略（可接云审核）
+- 日志脱敏：不落明文密码、不落完整 Token、谨慎记录用户日记正文
+
+十一、部署拓扑（完整版）
+- 客户端：App Store / 国内安卓渠道
+- 服务端：容器化（Docker）；API 至少 2 副本；Redis、Postgres 托管
+- 对象存储 + CDN
+- 密钥：环境变量 / 密钥管理服务
+- 备份：Postgres 定时备份；对象存储版本或生命周期策略
+
+十二、建议目录（仓库）
+/apps/mobile          Flutter 工程
+/apps/api             NestJS 工程
+/packages/shared      共享类型与协议（可选）
+/docs                 需求、架构、接口（本说明可归入）
+
+十三、开发阶段切分（虽要完整，仍建议按里程碑交付）
+M1 基础：账号、资料、绑定/解绑、权限骨架
+M2 内容：日记（分享/共同/图语音）、真心话（本地题 + 双人回合）
+M3 AI：角色系统、SELF 聊天流式、记忆摘要
+M4 双人 AI：PARTNER_CHAR、TOGETHER；AI 出题；亲密度与推送
+M5 打磨：动效、题库运营、安全审核、商店上架材料
+
+说明：产品按完整形态设计数据模型与模块边界；实现仍按 M1→M5 推进，避免一次性堆成不可测大泥球。
