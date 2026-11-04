@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "start": "node dist/main.js",
+    "start": "npx prisma db push --skip-generate && node dist/main.js",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main.js",
+    "start:prod": "npx prisma db push --skip-generate && node dist/main.js",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push"
   },
