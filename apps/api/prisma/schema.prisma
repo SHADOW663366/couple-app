@@ -48,3 +48,28 @@ model InviteCode {
   usedAt    DateTime?
   createdAt DateTime @default(now())
 }
+
+model TruthSession {
+  id                String       @id @default(cuid())
+  mode              String // solo | duo
+  pairId            String?
+  creatorId         String
+  currentTurnUserId String
+  status            String       @default("active") // active | ended
+  currentPrompt     String?
+  currentLevel      Int          @default(1)
+  rounds            TruthRound[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model TruthRound {
+  id         String       @id @default(cuid())
+  sessionId  String
+  session    TruthSession @relation(fields: [sessionId], references: [id])
+  prompt     String
+  level      Int          @default(1)
+  answererId String
+  answer     String
+  createdAt  DateTime     @default(now())
+}

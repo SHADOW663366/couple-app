@@ -56,7 +56,7 @@ class HomePage extends ConsumerWidget {
             title: '真心话',
             subtitle: bound ? '双人轮流问答' : '单人练习题库',
             icon: Icons.question_answer_outlined,
-            onTap: () => _soon(context),
+            onTap: () => context.push('/truth'),
           ),
           _FeatureTile(
             title: '日记',
