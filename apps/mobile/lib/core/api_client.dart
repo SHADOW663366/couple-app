@@ -58,6 +58,17 @@ class ApiClient {
     return _decode(res);
   }
 
+  Future<List<int>> getBytes(String path, {bool auth = true}) async {
+    final res = await _client.get(
+      Uri.parse('${AppConfig.apiBaseUrl}$path'),
+      headers: _headers(auth: auth, json: false),
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return res.bodyBytes;
+    }
+    throw ApiException('下载失败 (${res.statusCode})', statusCode: res.statusCode);
+  }
+
   Map<String, String> _headers({required bool auth, bool json = true}) {
     final headers = <String, String>{
       'Accept': 'application/json',

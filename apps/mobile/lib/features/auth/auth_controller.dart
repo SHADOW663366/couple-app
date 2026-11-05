@@ -99,8 +99,18 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> refreshMe() async {
+    final token = state.token;
+    if (token == null || token.isEmpty) return;
     final me = await _api.get('/users/me');
-    state = state.copyWith(user: me, clearError: true);
+    // 仅在绑定相关字段变化时更新，减少无意义 rebuild
+    final prev = state.user;
+    final changed = prev?['pairId'] != me['pairId'] ||
+        prev?['bound'] != me['bound'] ||
+        prev?['nickname'] != me['nickname'] ||
+        (prev?['partner'] as Map?)?['id'] != (me['partner'] as Map?)?['id'];
+    if (changed || prev == null) {
+      state = state.copyWith(user: me, clearError: true);
+    }
   }
 
   Future<void> logout() async {

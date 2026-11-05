@@ -4,20 +4,57 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/auth_controller.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      try {
+        await ref.read(authControllerProvider.notifier).refreshMe();
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final user = auth.user;
     final bound = user?['bound'] == true || user?['pairId'] != null;
     final nickname = user?['nickname']?.toString() ?? '旅人';
+    final partnerName =
+        (user?['partner'] as Map<String, dynamic>?)?['nickname']?.toString();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Couple'),
         actions: [
+          IconButton(
+            tooltip: '刷新状态',
+            onPressed: () async {
+              try {
+                await ref.read(authControllerProvider.notifier).refreshMe();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已同步绑定状态')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('同步失败：$e')),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.sync),
+          ),
           IconButton(
             tooltip: '退出登录',
             onPressed: () => ref.read(authControllerProvider.notifier).logout(),
@@ -36,7 +73,9 @@ class HomePage extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            bound ? '双人模式已开启 · 可一起玩真心话与共同日记' : '当前为单人模式 · 绑定后解锁双人玩法',
+            bound
+                ? '双人模式已开启${partnerName != null ? ' · 与 $partnerName' : ''} · 可一起玩真心话与共同日记'
+                : '当前为单人模式 · 绑定后解锁双人玩法（对方绑定后约十几秒内会自动刷新）',
             style: const TextStyle(color: Colors.black54),
           ),
           const SizedBox(height: 24),

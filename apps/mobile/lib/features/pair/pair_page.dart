@@ -16,6 +16,16 @@ class _PairPageState extends ConsumerState<PairPage> {
   final _code = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      try {
+        await ref.read(authControllerProvider.notifier).refreshMe();
+      } catch (_) {}
+    });
+  }
+
+  @override
   void dispose() {
     _code.dispose();
     super.dispose();

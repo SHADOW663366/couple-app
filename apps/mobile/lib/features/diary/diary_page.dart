@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-import '../../core/config.dart';
 import '../auth/auth_controller.dart';
 import 'diary_controller.dart';
 
@@ -399,7 +399,7 @@ class _DiaryDetailPageState extends ConsumerState<DiaryDetailPage> {
   String? _error;
   final _append = TextEditingController();
   final _player = AudioPlayer();
-  String? _playingUrl;
+  String? _playingId;
 
   @override
   void initState() {
@@ -429,20 +429,18 @@ class _DiaryDetailPageState extends ConsumerState<DiaryDetailPage> {
     });
   }
 
-  String _mediaUrl(String url) {
-    if (url.startsWith('http')) return url;
-    return '${AppConfig.apiBaseUrl}$url';
-  }
-
-  Future<void> _play(String url) async {
-    final full = _mediaUrl(url);
-    if (_playingUrl == full) {
+  Future<void> _play(String mediaId, String urlPath) async {
+    if (_playingId == mediaId) {
       await _player.stop();
-      setState(() => _playingUrl = null);
+      setState(() => _playingId = null);
       return;
     }
-    await _player.play(UrlSource(full));
-    setState(() => _playingUrl = full);
+    final api = ref.read(apiClientProvider);
+    final bytes = await api.getBytes(urlPath);
+    await _player.play(
+      BytesSource(Uint8List.fromList(bytes), mimeType: 'audio/mp4'),
+    );
+    setState(() => _playingId = mediaId);
   }
 
   Future<void> _submitAppend() async {
@@ -550,31 +548,85 @@ class _DiaryDetailPageState extends ConsumerState<DiaryDetailPage> {
           ...media.map((m) {
             final map = Map<String, dynamic>.from(m as Map);
             final kind = map['kind']?.toString();
-            final url = map['url']?.toString() ?? '';
+            final id = map['id']?.toString() ?? '';
+            final url = map['url']?.toString() ?? '/diary/media/$id';
             if (kind == 'image') {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    _mediaUrl(url),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        const Text('图片加载失败（云端重启后本地附件可能丢失）'),
-                  ),
+                  child: _AuthImage(path: url),
                 ),
               );
             }
-            final playing = _playingUrl == _mediaUrl(url);
+            final playing = _playingId == id;
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(playing ? Icons.stop_circle : Icons.play_circle),
               title: const Text('语音'),
-              onTap: () => _play(url),
+              onTap: () async {
+                try {
+                  await _play(id, url);
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('播放失败：$e')),
+                    );
+                  }
+                }
+              },
             );
           }),
         ],
       ],
     );
+  }
+}
+
+class _AuthImage extends ConsumerStatefulWidget {
+  const _AuthImage({required this.path});
+
+  final String path;
+
+  @override
+  ConsumerState<_AuthImage> createState() => _AuthImageState();
+}
+
+class _AuthImageState extends ConsumerState<_AuthImage> {
+  Uint8List? _bytes;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final bytes = await ref.read(apiClientProvider).getBytes(widget.path);
+      if (!mounted) return;
+      setState(() => _bytes = Uint8List.fromList(bytes));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '图片加载失败');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(_error!, style: const TextStyle(color: Colors.black54)),
+      );
+    }
+    if (_bytes == null) {
+      return const SizedBox(
+        height: 120,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Image.memory(_bytes!, fit: BoxFit.cover);
   }
 }

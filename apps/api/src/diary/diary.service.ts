@@ -20,14 +20,6 @@ export type UploadedDiaryFile = {
 export class DiaryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private uploadsDir() {
-    const dir = path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    return dir;
-  }
-
   private mediaKind(mime: string): 'image' | 'audio' | null {
     if (mime.startsWith('image/')) return 'image';
     if (mime.startsWith('audio/')) return 'audio';
@@ -36,7 +28,6 @@ export class DiaryService {
 
   private async saveFiles(entryId: string, files: UploadedDiaryFile[]) {
     if (!files.length) return [];
-    const dir = this.uploadsDir();
     const created = [];
     for (const file of files) {
       const kind = this.mediaKind(file.mimetype);
@@ -46,22 +37,21 @@ export class DiaryService {
       if (file.size > 8 * 1024 * 1024) {
         throw new BadRequestException('单个文件不能超过 8MB');
       }
-      const ext =
-        path.extname(file.originalname).slice(0, 8) ||
-        (kind === 'image' ? '.jpg' : '.m4a');
-      const name = `${entryId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
-      fs.writeFileSync(path.join(dir, name), file.buffer);
-      created.push(
-        await this.prisma.diaryMedia.create({
-          data: {
-            entryId,
-            kind,
-            url: `/uploads/${name}`,
-            mime: file.mimetype,
-            size: file.size,
-          },
-        }),
-      );
+      const row = await this.prisma.diaryMedia.create({
+        data: {
+          entryId,
+          kind,
+          url: 'pending',
+          mime: file.mimetype,
+          size: file.size,
+          data: new Uint8Array(file.buffer),
+        },
+      });
+      const updated = await this.prisma.diaryMedia.update({
+        where: { id: row.id },
+        data: { url: `/diary/media/${row.id}` },
+      });
+      created.push(updated);
     }
     return created;
   }
@@ -101,7 +91,9 @@ export class DiaryService {
       media: entry.media.map((m) => ({
         id: m.id,
         kind: m.kind,
-        url: m.url,
+        url: m.url.startsWith('/diary/media/')
+          ? m.url
+          : `/diary/media/${m.id}`,
         mime: m.mime,
         durationMs: m.durationMs,
         size: m.size,
@@ -168,6 +160,35 @@ export class DiaryService {
     if (!me?.pairId || me.pairId !== entry.pairId) {
       throw new ForbiddenException('无权查看这篇日记');
     }
+  }
+
+  async getMediaFile(userId: string, mediaId: string) {
+    const media = await this.prisma.diaryMedia.findUnique({
+      where: { id: mediaId },
+      include: { entry: true },
+    });
+    if (!media) throw new NotFoundException('附件不存在');
+    await this.assertCanRead(userId, media.entry);
+
+    if (media.data && media.data.length > 0) {
+      return {
+        data: Buffer.from(media.data),
+        mime: media.mime || 'application/octet-stream',
+      };
+    }
+
+    // 兼容旧版落盘文件
+    if (media.url.startsWith('/uploads/')) {
+      const filePath = path.join(process.cwd(), media.url.replace(/^\//, ''));
+      if (fs.existsSync(filePath)) {
+        return {
+          data: fs.readFileSync(filePath),
+          mime: media.mime || 'application/octet-stream',
+        };
+      }
+    }
+
+    throw new NotFoundException('附件数据不存在（可能已被清理）');
   }
 
   async create(userId: string, dto: CreateDiaryDto, files: UploadedDiaryFile[] = []) {

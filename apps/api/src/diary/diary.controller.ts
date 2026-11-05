@@ -4,11 +4,13 @@ import {
   Get,
   Param,
   Post,
+  Res,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthUser, CurrentUser } from '../common/current-user.decorator';
@@ -23,6 +25,18 @@ export class DiaryController {
   @Get()
   list(@CurrentUser() user: AuthUser) {
     return this.diary.list(user.id);
+  }
+
+  @Get('media/:mediaId')
+  async media(
+    @CurrentUser() user: AuthUser,
+    @Param('mediaId') mediaId: string,
+    @Res() res: Response,
+  ) {
+    const file = await this.diary.getMediaFile(user.id, mediaId);
+    res.setHeader('Content-Type', file.mime);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(file.data);
   }
 
   @Get(':id')

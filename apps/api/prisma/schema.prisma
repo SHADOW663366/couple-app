@@ -92,10 +92,12 @@ model DiaryMedia {
   entryId    String
   entry      DiaryEntry @relation(fields: [entryId], references: [id])
   kind       String // image | audio
-  url        String
+  url        String // /diary/media/:id
   mime       String?
   durationMs Int?
   size       Int?
+  /// 附件二进制入库，避免依赖容器本地 uploads 目录
+  data       Bytes?
   createdAt  DateTime   @default(now())
 }
 
