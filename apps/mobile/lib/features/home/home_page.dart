@@ -87,9 +87,9 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
           _FeatureTile(
             title: 'AI 角色',
-            subtitle: '二次元陪伴（M3 接入）',
+            subtitle: '选角色 · 单人陪伴聊天',
             icon: Icons.smart_toy_outlined,
-            onTap: () => _soon(context),
+            onTap: () => context.push('/character'),
           ),
           _FeatureTile(
             title: '真心话',
@@ -108,11 +108,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  void _soon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('下一里程碑实现，骨架已预留入口')),
-    );
-  }
 }
 
 class _FeatureTile extends StatelessWidget {
