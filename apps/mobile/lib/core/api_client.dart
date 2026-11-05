@@ -42,14 +42,32 @@ class ApiClient {
     return _decode(res);
   }
 
-  Map<String, String> _headers({required bool auth}) {
+  Future<Map<String, dynamic>> uploadFiles(
+    String path, {
+    required List<http.MultipartFile> files,
+    bool auth = true,
+  }) async {
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.apiBaseUrl}$path'),
+    );
+    req.headers.addAll(_headers(auth: auth, json: false));
+    req.files.addAll(files);
+    final streamed = await _client.send(req);
+    final res = await http.Response.fromStream(streamed);
+    return _decode(res);
+  }
+
+  Map<String, String> _headers({required bool auth, bool json = true}) {
     final headers = <String, String>{
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
       // localtunnel 免费页拦截绕过
       'bypass-tunnel-reminder': '1',
       'User-Agent': 'CoupleApp/1.0',
     };
+    if (json) {
+      headers['Content-Type'] = 'application/json';
+    }
     if (auth && _token != null) {
       headers['Authorization'] = 'Bearer $_token';
     }

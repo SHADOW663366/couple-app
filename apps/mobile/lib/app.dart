@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'features/auth/auth_controller.dart';
 import 'features/auth/login_page.dart';
+import 'features/diary/diary_page.dart';
 import 'features/home/home_page.dart';
 import 'features/pair/pair_page.dart';
 import 'features/truth/truth_page.dart';
@@ -31,6 +32,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (_, __) => const HomePage()),
       GoRoute(path: '/pair', builder: (_, __) => const PairPage()),
       GoRoute(path: '/truth', builder: (_, __) => const TruthPage()),
+      GoRoute(path: '/diary', builder: (_, __) => const DiaryPage()),
     ],
   );
 });

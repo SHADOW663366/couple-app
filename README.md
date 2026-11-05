@@ -5,7 +5,7 @@
 ## 仓库结构
 
 ```
-apps/api       NestJS 后端（M1：账号 / 绑定）
+apps/api       NestJS 后端（账号 / 绑定 / 真心话 / 日记）
 apps/mobile    Flutter 客户端
 packages/shared  共享类型（可选）
 docs           需求与架构说明
@@ -18,6 +18,8 @@ docs           需求与架构说明
 | Node.js 20+ | 已用于 API |
 | Flutter 3.x | 需本机安装后才能跑客户端 |
 | 数据库 | 本地开发默认 SQLite（Prisma），生产可切 PostgreSQL |
+
+公网 API（SnapDeploy）：见 `apps/mobile/lib/core/config.dart` 默认地址。
 
 ## 快速启动 — API
 
@@ -43,11 +45,13 @@ flutter pub get
 flutter run
 ```
 
-API 地址在 `apps/mobile/lib/core/config.dart`（默认 `http://10.0.2.2:3000` 适配 Android 模拟器）。
+可用 `--dart-define=API_BASE_URL=...` 覆盖 API 地址。
 
 ## 当前里程碑
 
-- **M1（进行中）**：注册登录、邀请码绑定/解绑、权限骨架、客户端基础页
-- 后续：日记 → 真心话 → AI 角色聊天 → 双人 AI / 亲密度 / 推送
+- **M1**：注册登录、邀请码绑定/解绑
+- **真心话**：本地题库单人/双人
+- **日记**：私密 / 分享 / 共同 + 图片语音（进行中发布）
+- 后续：绑定实时刷新 → AI 角色 → 亲密度 / 推送
 
-详见 `docs/架构说明.txt`、`docs/技术栈与预期效果.txt`。
+详见 `docs/待完成清单.txt`、`docs/架构说明.txt`。

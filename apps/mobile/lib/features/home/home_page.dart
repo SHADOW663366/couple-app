@@ -62,7 +62,7 @@ class HomePage extends ConsumerWidget {
             title: '日记',
             subtitle: '分享 / 共同日记 · 图与语音',
             icon: Icons.menu_book_outlined,
-            onTap: () => _soon(context),
+            onTap: () => context.push('/diary'),
           ),
         ],
       ),

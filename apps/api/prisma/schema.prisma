@@ -73,3 +73,37 @@ model TruthRound {
   answer     String
   createdAt  DateTime     @default(now())
 }
+
+model DiaryEntry {
+  id         String       @id @default(cuid())
+  authorId   String
+  pairId     String?
+  visibility String       @default("private") // private | shared | joint
+  title      String?
+  text       String       @default("")
+  media      DiaryMedia[]
+  blocks     DiaryBlock[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+model DiaryMedia {
+  id         String     @id @default(cuid())
+  entryId    String
+  entry      DiaryEntry @relation(fields: [entryId], references: [id])
+  kind       String // image | audio
+  url        String
+  mime       String?
+  durationMs Int?
+  size       Int?
+  createdAt  DateTime   @default(now())
+}
+
+model DiaryBlock {
+  id        String     @id @default(cuid())
+  entryId   String
+  entry     DiaryEntry @relation(fields: [entryId], references: [id])
+  authorId  String
+  text      String     @default("")
+  createdAt DateTime   @default(now())
+}
