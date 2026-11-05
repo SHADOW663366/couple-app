@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
 import '../auth/auth_controller.dart';
@@ -220,45 +221,77 @@ class _DiaryComposerPageState extends ConsumerState<DiaryComposerPage> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final x = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 75,
-      maxWidth: 1600,
-    );
-    if (x == null) return;
-    setState(() => _files.add(File(x.path)));
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      if (source == ImageSource.camera) {
+        final cam = await Permission.camera.request();
+        if (!cam.isGranted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('需要相机权限')),
+            );
+          }
+          return;
+        }
+      } else {
+        // Android 13+ 读图；旧系统 image_picker 会自行处理
+        await Permission.photos.request();
+      }
+      final picker = ImagePicker();
+      final x = await picker.pickImage(
+        source: source,
+        imageQuality: 75,
+        maxWidth: 1600,
+      );
+      if (x == null) return;
+      setState(() => _files.add(File(x.path)));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('添加图片失败：$e')),
+        );
+      }
+    }
   }
 
   Future<void> _toggleRecord() async {
-    if (_recording) {
-      final path = await _recorder.stop();
+    try {
+      if (_recording) {
+        final path = await _recorder.stop();
+        setState(() {
+          _recording = false;
+          if (path != null) _files.add(File(path));
+        });
+        return;
+      }
+      final mic = await Permission.microphone.request();
+      if (!mic.isGranted || !await _recorder.hasPermission()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('需要麦克风权限才能录音')),
+          );
+        }
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/diary_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path,
+      );
       setState(() {
-        _recording = false;
-        if (path != null) _files.add(File(path));
+        _recording = true;
+        _recordingPath = path;
       });
-      return;
-    }
-    if (!await _recorder.hasPermission()) {
+    } catch (e) {
+      setState(() => _recording = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('需要麦克风权限才能录音')),
+          SnackBar(content: Text('录音失败：$e')),
         );
       }
-      return;
     }
-    final dir = await getTemporaryDirectory();
-    final path =
-        '${dir.path}/diary_${DateTime.now().millisecondsSinceEpoch}.m4a';
-    await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc),
-      path: path,
-    );
-    setState(() {
-      _recording = true;
-      _recordingPath = path;
-    });
   }
 
   Future<void> _submit() async {
@@ -336,14 +369,24 @@ class _DiaryComposerPageState extends ConsumerState<DiaryComposerPage> {
             ),
           ),
           const SizedBox(height: 16),
+          const Text(
+            '附件（可选）：相册 / 拍照 / 语音，发布时会一并上传',
+            style: TextStyle(color: Colors.black54, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: loading ? null : _pickImage,
-                icon: const Icon(Icons.image_outlined),
-                label: const Text('图片'),
+                onPressed: loading ? null : () => _pickImage(ImageSource.gallery),
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('相册'),
+              ),
+              OutlinedButton.icon(
+                onPressed: loading ? null : () => _pickImage(ImageSource.camera),
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: const Text('拍照'),
               ),
               OutlinedButton.icon(
                 onPressed: loading ? null : _toggleRecord,

@@ -86,6 +86,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
             )
           else ...[
+            if (chat.aiMode == 'local')
+              Container(
+                width: double.infinity,
+                color: const Color(0xFFFFF3CD),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: const Text(
+                  '当前本地规则回复（会较呆）。SnapDeploy 配置 DEEPSEEK_API_KEY 并重新部署后才是真 AI。',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF664D03)),
+                ),
+              ),
             if (chat.loading)
               const LinearProgressIndicator(minHeight: 2),
             Expanded(

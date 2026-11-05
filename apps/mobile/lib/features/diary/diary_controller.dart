@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/api_client.dart';
@@ -92,14 +93,43 @@ class DiaryController extends StateNotifier<DiaryState> {
     }
   }
 
+  MediaType _guessMediaType(String path) {
+    final ext = p.extension(path).toLowerCase();
+    switch (ext) {
+      case '.png':
+        return MediaType('image', 'png');
+      case '.gif':
+        return MediaType('image', 'gif');
+      case '.webp':
+        return MediaType('image', 'webp');
+      case '.m4a':
+        return MediaType('audio', 'mp4');
+      case '.aac':
+        return MediaType('audio', 'aac');
+      case '.mp3':
+        return MediaType('audio', 'mpeg');
+      case '.wav':
+        return MediaType('audio', 'wav');
+      case '.jpg':
+      case '.jpeg':
+      default:
+        if (ext == '.m4a' || ext == '.aac' || ext == '.mp3') {
+          return MediaType('audio', 'mp4');
+        }
+        return MediaType('image', 'jpeg');
+    }
+  }
+
   Future<Map<String, dynamic>> _uploadMedia(String id, List<File> files) async {
     final parts = <http.MultipartFile>[];
     for (final f in files) {
+      final name = p.basename(f.path);
       parts.add(
         await http.MultipartFile.fromPath(
           'files',
           f.path,
-          filename: p.basename(f.path),
+          filename: name,
+          contentType: _guessMediaType(f.path),
         ),
       );
     }

@@ -20,9 +20,18 @@ export type UploadedDiaryFile = {
 export class DiaryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private mediaKind(mime: string): 'image' | 'audio' | null {
-    if (mime.startsWith('image/')) return 'image';
-    if (mime.startsWith('audio/')) return 'audio';
+  private mediaKind(mime: string, filename: string): 'image' | 'audio' | null {
+    const lower = (filename || '').toLowerCase();
+    if (mime.startsWith('image/') || /\.(jpe?g|png|gif|webp|heic|bmp)$/.test(lower)) {
+      return 'image';
+    }
+    // Flutter 录音常被标成 application/octet-stream，按扩展名识别
+    if (
+      mime.startsWith('audio/') ||
+      /\.(m4a|aac|mp3|wav|ogg|amr|3gp)$/.test(lower)
+    ) {
+      return 'audio';
+    }
     return null;
   }
 
@@ -30,9 +39,11 @@ export class DiaryService {
     if (!files.length) return [];
     const created = [];
     for (const file of files) {
-      const kind = this.mediaKind(file.mimetype);
+      const kind = this.mediaKind(file.mimetype, file.originalname);
       if (!kind) {
-        throw new BadRequestException(`不支持的文件类型: ${file.mimetype}`);
+        throw new BadRequestException(
+          `不支持的文件类型: ${file.mimetype || 'unknown'} (${file.originalname})`,
+        );
       }
       if (file.size > 8 * 1024 * 1024) {
         throw new BadRequestException('单个文件不能超过 8MB');
